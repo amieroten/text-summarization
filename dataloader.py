@@ -79,10 +79,9 @@ def load_cnn_dailymail_deep(batch_size=1, max_vocab=5000, max_sequence=400):
         max_tokens=max_vocab,
         output_mode='int',
         output_sequence_length=max_sequence,
-        standardize=None)
+        standardize=standardize)
 
     ds_train = ds_train.map(remove_newline, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    ds_train = ds_train.map(add_EOS_BOS, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # "Train" vectorization layer on training articles.
     int_vectorize.adapt(ds_train.map(lambda article, highlights: article))
@@ -98,16 +97,14 @@ def load_cnn_dailymail_deep(batch_size=1, max_vocab=5000, max_sequence=400):
     ds_train = ds_train.prefetch(tf.data.experimental.AUTOTUNE)
 
     ds_test = ds_test.map(remove_newline, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    ds_test = ds_test.map(add_EOS_BOS, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     ds_test = ds_test.map(int_vectorize_map, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    ds_test = ds_test.batch(batch_size=batch_size)
+    ds_test = ds_test.batch(batch_size=1)
     ds_test = ds_test.cache()
     ds_test = ds_test.prefetch(tf.data.experimental.AUTOTUNE)
 
     ds_val = ds_val.map(remove_newline, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    ds_test = ds_test.map(add_EOS_BOS, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     ds_val = ds_val.map(int_vectorize_map, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    ds_val = ds_val.shuffle(ds_info.splits['validation'].num_examples)
+    #ds_val = ds_val.shuffle(ds_info.splits['validation'].num_examples)
     ds_val = ds_val.batch(batch_size=batch_size)
     ds_val = ds_val.prefetch(tf.data.experimental.AUTOTUNE)
 
@@ -135,7 +132,6 @@ def load_cnn_dailymail_experiment(batch_size=1, max_vocab=5000, max_sequence=400
 
     def int_vectorize_map(article, highlights):
         article = tf.expand_dims(article, -1)
-        print(article)
         highlights = tf.expand_dims(highlights, -1)
         return int_vectorize(article), int_vectorize(highlights)
 
