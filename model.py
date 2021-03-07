@@ -36,7 +36,8 @@ class Encoder(tf.keras.Model):
 
     def call(self, w_i, hidden):
         if hidden is None:
-            hidden = self.initialize_hidden_state()
+            batch_size = w_i.shape[0]
+            hidden = self.initialize_hidden_state(batch_size)
 
         # w_i.shape = (batch_size, word_int, sequence_len)
         # Sequence represented by vector length sequence_len,
@@ -58,8 +59,8 @@ class Encoder(tf.keras.Model):
         h_i, *hidden = self.recurrent_layer(w_i, initial_state=hidden)
         return h_i, hidden
 
-    def initialize_hidden_state(self):
-        return [tf.random.normal((self.batch_size, self.hidden_dims)) for i in range(4)]
+    def initialize_hidden_state(self, batch_size):
+        return [tf.random.normal((batch_size, self.hidden_dims)) for i in range(4)]
 
 class BahdanauAttention(tf.keras.layers.Layer):
     def __init__(self, units):
@@ -70,9 +71,29 @@ class BahdanauAttention(tf.keras.layers.Layer):
         self.V = tf.keras.layers.Dense(1)
 
     def call(self, s_t, h_i):
+        # h_i: hidden state from encoder, shape:
+        #       (batch_size, max_article_seq_len, #_RNN_unitsx2)
+        # s_t: hidden state from decoder, shape:
+        #       (batch_size, 1, # RNN units)
+
+        # Additive style attention.
+        # e_i^t = v.T * tanh(W_h*h_i + W_s*s_t+b_attn)
+        # ...so e_t: (batch_size, max_article_seq_len, 1)
         e_t = self.V(tf.nn.tanh(self.W_h(h_i) + self.W_s(s_t) + self.b_attn))
+
+        # Take softmax to get a proper distribution.
+        # tf.sum(a_t, axis=1) will be a vector of
+        # approximately ones, length of batch_size.
         a_t = tf.nn.softmax(e_t, axis=1)
+
+        # Use attention distribution to weight
+        # the encoder hidden states. Shape:
+        #   (batch_size, max_article_seq_len, #_RNN_unitsx2)
         context = a_t * h_i
+
+        # Finally, sum over each timepoint to produce
+        # a context vector (batch_size, RNN hidden units*2)!
+        # Woah! TODO: Think about the shape here.
         context = tf.reduce_sum(context, axis=1)
         return context, a_t
 
@@ -96,19 +117,41 @@ class Decoder(tf.keras.Model):
 
         self.attention = BahdanauAttention(self.hidden_dims)
         self.distribution_1 = layers.Dense(units=vocab_len, activation="linear", use_bias=True)
-        self.distribution_2 = layers.Dense(units=vocab_len, activation="softmax", use_bias=True)
+        self.distribution_2 = layers.Dense(units=vocab_len, activation="linear", use_bias=True)
+        self.distribution_3 = layers.Dense(units=vocab_len, activation="softmax", use_bias=True)
 
 
     def call(self, inputs, hidden, h_i):
         if hidden is None:
             hidden = self.build_initial_state()
+        # Get embedding for single word at timepoint t.
+        # Well, single word for each item in batch.
+        #   (batch_size, 1, embedding_size)
         s_t = self.embedding(inputs)
+        # Now, get decoder state.
+        #   (batch_size, 1, # RNN hidden units)
         s_t, *hidden = self.recurrent_layer(s_t, hidden)
+        # At this point, pass the encoder state sequence h_i
+        # and the decoder state s_t into attention mechanism
+        # to calculate the attention distribution (a^t), as
+        # well as the context vector (h_t*). The calculations
+        # which are occuring inside of the attention layer
+        # are:
+        #   e_i^t = v.T * tanh(W_h*h_i + W_s*s_t+b_attn)
+        #   a^t = softmax(e^t)
         h_star, attention_weights = self.attention(s_t, h_i)
-        h_star = tf.expand_dims(tf.tile(h_star, tf.constant([s_t.shape[1],1])), axis=0)
+
+        # Reshaping context vector to concatenate with
+        # encoder output.
+        h_star = tf.expand_dims(tf.tile(h_star, tf.constant([s_t.shape[1],1])), axis=1)
         s_t_h_star = tf.concat([s_t, h_star], axis=-1)
-        P_vocab = self.distribution_2(self.distribution_1(s_t_h_star))
-        return P_vocab, hidden
+
+        # Finally, pass through two dense linear layers with the
+        # shape of the vocabulary, and a final softmax layer to
+        # get the probability distribution over all words!
+        # P_vocab=softmax(V′(V[st,h∗t]+b)+b′)
+        P_vocab = self.distribution_3(self.distribution_2(self.distribution_1(s_t_h_star)))
+        return P_vocab, hidden, attention_weights
 
     def build_initial_state(self):
         return [tf.random.normal((self.batch_size, self.hidden_dims)) for i in range(2)]
