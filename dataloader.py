@@ -9,7 +9,6 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_text as text
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
-from nltk.tokenize import sent_tokenize
 
 
 # As in HW3, but S = summary, not sentence!

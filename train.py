@@ -60,7 +60,7 @@ def experiment1():
 
     for epoch in range(epochs):
         epoch_loss = 0
-        for batch_num, batch_data in enumerate(ds_train):
+        for batch_num, batch_data in tqdm(enumerate(ds_train)):
             loss = 0
             # X shape: (batch_size, max_article_seq_len)
             # y shape: (batch_size, max_summary_len)
@@ -95,7 +95,7 @@ def experiment1():
                 # At each timestep, decoder (single-layer,
                 # unidirectional RNN), gets the target word.
                 # Limiting target sequence to 100 tokens.
-                for timestep in tqdm(range(1, 100)):
+                for timestep in range(1, 100):
 
                     P_vocab, decoder_hidden, attn = decoder(decoder_input, decoder_hidden, h_i)
                     loss += NLL_loss(y[:, timestep], P_vocab)
