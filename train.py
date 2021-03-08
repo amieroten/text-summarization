@@ -31,7 +31,7 @@ rng = np.random.default_rng()
 logging.basicConfig(filename='../drive/MyDrive/NLP_Results/NALLAPATI_BASELINE' +
                              '_' + str(EPOCHS) + '_EPOCHS_' + str(BATCH_SIZE) +
                              '_BATCH_SIZE_' + str(VOCAB_SIZE) + '_VOCAB_SIZE.log'
-                             , encoding='utf-8', level=logging.DEBUG)
+                             , level=logging.DEBUG)
 
 
 
@@ -48,6 +48,8 @@ def experiment1():
     # Set up checkpoints.
     checkpoint = tf.train.Checkpoint(encoder=encoder,
                                      decoder=decoder)
+    status = checkpoint.restore(tf.train.latest_checkpoint(checkpoint_directory))
+    logging.info("Checkpoint status:", status)
 
     # Predict summary for one article.
     def predict(article):
@@ -123,7 +125,7 @@ def experiment1():
         vars = encoder.trainable_variables + decoder.trainable_variables
         gradients = tape.gradient(batch_loss, vars)
         optimizer.apply_gradients(zip(gradients, vars))
-      return batch_loss
+        return batch_loss
 
     # Negative log likelihood loss.
     def NLL_loss(target, P_vocab):
@@ -153,7 +155,7 @@ def experiment1():
         logging.info("Average epoch loss: ", epoch_loss/batch_num)
 
         # Save model checkpoints every epoch.
-        checkpoint.save(CHECKPOINT_DIR + str(epoch+1) + '.cpt')
+        checkpoint.save(file_prefix='.cpt')
 
         # Validate.
         logging.info("\n\nValidating!")

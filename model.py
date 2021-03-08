@@ -117,9 +117,7 @@ class Decoder(tf.keras.Model):
 
         self.attention = BahdanauAttention(self.hidden_dims)
         self.distribution_1 = layers.Dense(units=vocab_len, activation="linear", use_bias=True)
-        self.distribution_2 = layers.Dense(units=vocab_len, activation="linear", use_bias=True)
-        self.distribution_3 = layers.Dense(units=vocab_len, activation="softmax", use_bias=True)
-
+        self.distribution_2 = layers.Dense(units=vocab_len, activation="softmax", use_bias=True)
 
     def call(self, inputs, hidden, h_i):
         if hidden is None:
@@ -150,7 +148,7 @@ class Decoder(tf.keras.Model):
         # shape of the vocabulary, and a final softmax layer to
         # get the probability distribution over all words!
         # P_vocab=softmax(V′(V[st,h∗t]+b)+b′)
-        P_vocab = self.distribution_3(self.distribution_2(self.distribution_1(s_t_h_star)))
+        P_vocab = self.distribution_2(self.distribution_1(s_t_h_star))
         return P_vocab, hidden, attention_weights
 
     def build_initial_state(self):
