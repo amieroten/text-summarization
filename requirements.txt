@@ -1,6 +1,0 @@
-tensorflow
-tensorflow-addons
-tensorflow-datasets
-tensorflow-probability
-tensorflow-text
-tqdm

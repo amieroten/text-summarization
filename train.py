@@ -4,7 +4,6 @@ import os
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras import optimizers
-import tensorflow_probability as tfp
 from tqdm import tqdm
 
 from model import Encoder, DecoderBaseline, \
@@ -182,20 +181,24 @@ def NLL_loss_point_gen(target, P_vocab, P_gen=None,
             # thus, word could be OOV.
             target_word = y_words[index][timestep + 1].decode('UTF-8')
 
-
             # If word is not in vocabulary, P_vocab_w is 0.
             if vocab[target[index]] == '[UNK]':
                 P_vocab_w = 0
+                # Select a pad value that we know won't
+                # match the target for use in computing
+                # sum over attention.
+                pad_value = '.[UNK].'
             else:
                 P_vocab_w = P_vocab[index][target[index]]
+                pad_value = '[UNK]'
 
             # Sum over probabilities in attention distribution
             # where the corresponding word in article is the
             # target word. If target word is not in article,
             # this will be zero.
-            attn_sum = sum([a_t_i for a_t_i, word in
-                               zip(attention[index], X_words[index])
-                               if word.decode("UTF-8") == target_word])
+            X_words_arr = np.pad(np.array([word.decode("UTF-8") for word in X_words[index]]),
+                                 (0,400-len(X_words[index])), constant_values=(0,pad_value))
+            attn_sum = sum(attention[index][X_words_arr == target_word])
             P_w = P_gen[index]*P_vocab_w + (1-P_gen[index])*attn_sum + 0.00001 # To not take log of zero.
                                                                               # It is bizarre to have to
                                                                               # do this in my opinion, but
@@ -235,10 +238,11 @@ def prep_word_X_y(X,y, max_article_seq=400, max_summary_seq=120):
     return X_words_reduced, y_words_reduced
 
 
-def validation_inference(encoder, decoder, vocab, dataset, batch_size, epoch, point_gen=True):
+def validation_inference(encoder, decoder, vocab, dataset, batch_size, epoch, avg_epoch_loss, point_gen=True):
     print('\n Performing inference on validation set!')
     index = 1
     with open("validation_output_" + str(epoch) + ".txt", "w") as f:
+        f.write("Average loss for this epoch (train set):" + str(avg_epoch_loss))
         for batch_data in dataset:
             X = tf.squeeze(batch_data[0], axis=1)
             y = tf.squeeze(batch_data[1], axis=1)
@@ -258,19 +262,19 @@ def validation_inference(encoder, decoder, vocab, dataset, batch_size, epoch, po
                                                          encoder, decoder, vocab))
 
                 f.write("\nExample #" + str(index) + ":")
-                f.write("In vocab article:")
+                f.write("\nIn vocab article:\n")
                 f.write(article)
                 print(article)
-                f.write("In vocab summary:")
+                f.write("\nIn vocab summary:\n")
                 f.write(summary)
                 print(summary)
-                f.write("Complete article:")
+                f.write("\nComplete article:\n")
                 f.write(" ".join([word.decode('UTF-8') for word in article_full]))
                 print(" ".join([word.decode('UTF-8') for word in article_full]))
-                f.write("Complete summary:")
+                f.write("\nComplete summary:\n")
                 f.write(" ".join([word.decode('UTF-8') for word in summary_full]))
                 print(" ".join([word.decode('UTF-8') for word in summary_full]))
-                f.write("Predicted summary:")
+                f.write("\nPredicted summary:\n")
                 f.write(prediction)
                 print(prediction)
                 index += 1
@@ -279,8 +283,8 @@ def experiment_pointer_gen():
     '''
     Basic code to train text summarization model.
     '''
-    batch_size = 8
-    vocab_size = 5000
+    batch_size = 16
+    vocab_size = 500
     ds_train, ds_val, ds_test, vocab = load_cnn_dailymail_deep(batch_size=batch_size,
                                                           max_vocab=vocab_size,
                                                           max_sequence=400)
@@ -289,17 +293,27 @@ def experiment_pointer_gen():
     epochs = 30
 
     # As in See et al.
-    optimizer = tf.keras.optimizers.Adagrad(learning_rate=0.15, initial_accumulator_value=0.15)
+    optimizer = tf.keras.optimizers.Adagrad(learning_rate=0.15, initial_accumulator_value=0.1)
 
-    # Set up checkpointing.
-    checkpoint_directory = "/train_checkpoints_pointer_generator"
-    checkpoint_prefix = os.path.join(checkpoint_directory, "ckpt")
-    checkpoint = tf.train.Checkpoint(optimizer=optimizer,
+    # Set up checkpointing. Assisted by https://www.tensorflow.org/guide/checkpoint
+    checkpoint_directory = "./train_checkpoints_pointer_generator"
+    checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
+                                     optimizer=optimizer,
                                      encoder=encoder,
                                      decoder=decoder)
+    cpt_manager = tf.train.CheckpointManager(checkpoint,
+                                             checkpoint_directory,
+                                             max_to_keep=None)
+    checkpoint.restore(cpt_manager.latest_checkpoint)
+
+    if cpt_manager.latest_checkpoint:
+        print("Restored from", cpt_manager.latest_checkpoint)
+    else:
+        print("Starting training from ground zero!")
 
     print("Beginning training!")
-    for epoch in range(epochs):
+
+    for epoch in range(int(checkpoint.step), epochs):
         print("Epoch", epoch+1)
         epoch_loss = 0
         for batch_num, batch_data in tqdm(enumerate(ds_train)):
@@ -331,7 +345,7 @@ def experiment_pointer_gen():
                 gradients = tape.gradient(batch_loss, vars)
                 optimizer.apply_gradients(zip(gradients, vars))
 
-            epoch_loss += loss
+            epoch_loss += batch_loss
             print("batch_loss: ", batch_loss)
 
             # Monitor intermittent predictions.
@@ -344,25 +358,25 @@ def experiment_pointer_gen():
                 print("Generated summary: \n\t", " ".join(greedy_predict_point_gen(tf.expand_dims(X[0],axis=0),
                                                                                    encoder, decoder, vocab,
                                                                                    article_full)))
-
-        print("loss: ", epoch_loss/batch_num)
+        average_batch_loss_per_epoch = epoch_loss/(batch_num+1)
+        print("average batch loss for epoch: ", average_batch_loss_per_epoch)
 
         # Save checkpoint every epoch.
-        checkpoint.save(file_prefix=checkpoint_prefix)
+        checkpoint.step.assign_add(1)
+        cpt_manager.save()
 
         # Perform inference on val set and output for inspection.
-        validation_inference(encoder, decoder, vocab, ds_val, batch_size, epoch+1, point_gen=True)
+        validation_inference(encoder, decoder, vocab, ds_val,
+                             batch_size, epoch+1, average_batch_loss_per_epoch,
+                             point_gen=True)
 
-        # Just in case, write out encoder/decoder model each time as well.
-        encoder.save("pointer_gen_encoder_epoch_" + str(epoch) + ".SavedModel")
-        decoder.save("pointer_gen_decoder_epoch_" + str(epoch) + ".SavedModel")
 
 def experiment_baseline():
     '''
     Basic code to train text summarization model.
     '''
-    batch_size = 8
-    vocab_size = 5000
+    batch_size = 16
+    vocab_size = 500
     ds_train, ds_val, ds_test, vocab = load_cnn_dailymail_deep(batch_size=batch_size,
                                                           max_vocab=vocab_size,
                                                           max_sequence=400)
@@ -381,6 +395,8 @@ def experiment_baseline():
                                      decoder=decoder)
 
     print("Beginning training!")
+    total_train_batches = len(ds_train)
+
     for epoch in range(epochs):
         print("Epoch", epoch+1)
         epoch_loss = 0
@@ -439,17 +455,15 @@ def experiment_baseline():
                 print("Generated summary: \n\t", " ".join(greedy_predict(tf.expand_dims(X[0],axis=0),
                                                                          encoder, decoder, vocab)))
 
-        print("loss: ", epoch_loss/batch_num)
+        print("average batch loss over epoch: ", epoch_loss/total_train_batches)
 
         # Save checkpoint every epoch.
         checkpoint.save(file_prefix=checkpoint_prefix)
 
         # Perform inference on val set and output for inspection.
-        validation_inference(encoder, decoder, vocab, ds_val, batch_size, epoch+1, point_gen=True)
+        validation_inference(encoder, decoder, vocab, ds_val, batch_size,
+                             epoch+1, epoch_loss/total_train_batches, point_gen=True)
 
-        # Just in case, write out encoder/decoder model each time as well.
-        encoder.save("baseline_encoder_epoch_" + str(epoch) + ".SavedModel")
-        decoder.save("baseline_decoder_epoch_" + str(epoch) + ".SavedModel")
 
 
 if __name__ == "__main__":
