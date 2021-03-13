@@ -309,11 +309,17 @@ def experiment_pointer_gen():
                                              max_to_keep=None)
     checkpoint.restore(cpt_manager.latest_checkpoint)
 
+    # Perform inference on val set and output for inspection.
+    # This is just here temporarily since it crashed.
+    validation_inference(encoder, decoder, vocab, ds_val,
+                         16, 5, 0, checkpoint_directory, point_gen=True)
+
     if cpt_manager.latest_checkpoint:
         print("Restored from", cpt_manager.latest_checkpoint)
     else:
         print("Starting training from ground zero!")
 
+  
     print("Beginning training!")
 
     for epoch in range(int(checkpoint.step), epochs):
@@ -371,7 +377,7 @@ def experiment_pointer_gen():
         # Perform inference on val set and output for inspection.
         validation_inference(encoder, decoder, vocab, ds_val,
                              batch_size, epoch+1, average_batch_loss_per_epoch,
-                             point_gen=True)
+                             checkpoint_directory, point_gen=True)
 
 
 def experiment_baseline():
