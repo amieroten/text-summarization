@@ -87,9 +87,9 @@ def load_cnn_dailymail_deep(batch_size=1, max_vocab=5000, max_sequence=400):
                                                      shuffle_files=False,
                                                      as_supervised=True,
                                                      with_info=True)
-    ds_train = ds_train.take(16)
-    ds_test = ds_test.take(16)
-    ds_val = ds_val.take(16)
+    ds_train = ds_train.take(20000)
+    ds_test = ds_test.take(1000)
+    ds_val = ds_val.take(100)
 
     int_vectorize = TextVectorization(
         max_tokens=max_vocab,
@@ -130,7 +130,7 @@ def load_cnn_dailymail_deep(batch_size=1, max_vocab=5000, max_sequence=400):
     ds_val = ds_val.batch(batch_size=batch_size)
     ds_val = ds_val.prefetch(tf.data.experimental.AUTOTUNE)
 
-    return ds_train.take(1000), ds_val, ds_test, int_vectorize.get_vocabulary()
+    return ds_train, ds_val, ds_test, int_vectorize.get_vocabulary()
 
 def load_cnn_dailymail_experiment(batch_size=1, max_vocab=5000, max_sequence=400):
 

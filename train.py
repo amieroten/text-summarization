@@ -238,10 +238,13 @@ def prep_word_X_y(X,y, max_article_seq=400, max_summary_seq=120):
     return X_words_reduced, y_words_reduced
 
 
-def validation_inference(encoder, decoder, vocab, dataset, batch_size, epoch, avg_epoch_loss, point_gen=True):
+def validation_inference(encoder, decoder, vocab, dataset, 
+                         batch_size, epoch, avg_epoch_loss, 
+                         save_dir, point_gen=True):
     print('\n Performing inference on validation set!')
     index = 1
-    with open("validation_output_" + str(epoch) + ".txt", "w") as f:
+    filepath = os.path.join(save_dir, "validation_output_" + str(epoch) + ".txt")
+    with open(filepath, "w") as f:
         f.write("Average loss for this epoch (train set):" + str(avg_epoch_loss))
         for batch_data in dataset:
             X = tf.squeeze(batch_data[0], axis=1)
@@ -284,7 +287,7 @@ def experiment_pointer_gen():
     Basic code to train text summarization model.
     '''
     batch_size = 16
-    vocab_size = 500
+    vocab_size = 50000
     ds_train, ds_val, ds_test, vocab = load_cnn_dailymail_deep(batch_size=batch_size,
                                                           max_vocab=vocab_size,
                                                           max_sequence=400)
@@ -296,7 +299,7 @@ def experiment_pointer_gen():
     optimizer = tf.keras.optimizers.Adagrad(learning_rate=0.15, initial_accumulator_value=0.1)
 
     # Set up checkpointing. Assisted by https://www.tensorflow.org/guide/checkpoint
-    checkpoint_directory = "./train_checkpoints_pointer_generator"
+    checkpoint_directory = "/content/drive/MyDrive/NLP_Results/train_checkpoints_pointer_generator/"
     checkpoint = tf.train.Checkpoint(step=tf.Variable(0),
                                      optimizer=optimizer,
                                      encoder=encoder,
@@ -376,7 +379,7 @@ def experiment_baseline():
     Basic code to train text summarization model.
     '''
     batch_size = 16
-    vocab_size = 500
+    vocab_size = 50000
     ds_train, ds_val, ds_test, vocab = load_cnn_dailymail_deep(batch_size=batch_size,
                                                           max_vocab=vocab_size,
                                                           max_sequence=400)
@@ -385,10 +388,10 @@ def experiment_baseline():
     epochs = 1
 
     # As in See et al.
-    optimizer = tf.keras.optimizers.Adagrad(learning_rate=0.15, initial_accumulator_value=0.15)
+    optimizer = tf.keras.optimizers.Adagrad(learning_rate=0.15, initial_accumulator_value=0.1)
 
     # Set up checkpointing.
-    checkpoint_directory = "/train_checkpoints_baseline"
+    checkpoint_directory = "drive/MyDrive/train_checkpoints_baseline"
     checkpoint_prefix = os.path.join(checkpoint_directory, "ckpt")
     checkpoint = tf.train.Checkpoint(optimizer=optimizer,
                                      encoder=encoder,
