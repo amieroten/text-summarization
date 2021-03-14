@@ -251,9 +251,9 @@ def validation_inference(encoder, decoder, vocab, dataset,
             y = tf.squeeze(batch_data[1], axis=1)
             X_words, y_words = prep_word_X_y(batch_data[2], batch_data[3])
 
-            for i in range(batch_size):
+            for i in range(len(y)):
                 article = " ".join([vocab[word] for word in X[i]])
-                summary = " ".join([vocab[word] for word in y[0]])
+                summary = " ".join([vocab[word] for word in y[i]])
                 article_full = X_words[i]
                 summary_full = y_words[i]
                 if point_gen:
@@ -308,11 +308,6 @@ def experiment_pointer_gen():
                                              checkpoint_directory,
                                              max_to_keep=None)
     checkpoint.restore(cpt_manager.latest_checkpoint)
-
-    # Perform inference on val set and output for inspection.
-    # This is just here temporarily since it crashed.
-    validation_inference(encoder, decoder, vocab, ds_val,
-                         16, 5, 0, checkpoint_directory, point_gen=True)
 
     if cpt_manager.latest_checkpoint:
         print("Restored from", cpt_manager.latest_checkpoint)
