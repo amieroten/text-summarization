@@ -238,14 +238,15 @@ def prep_word_X_y(X,y, max_article_seq=400, max_summary_seq=120):
     return X_words_reduced, y_words_reduced
 
 
-def validation_inference(encoder, decoder, vocab, dataset, 
-                         batch_size, epoch, avg_epoch_loss, 
-                         save_dir, point_gen=True):
-    print('\n Performing inference on validation set!')
+def greedy_inference(encoder, decoder, vocab, dataset,
+                         epoch, avg_epoch_loss,
+                         save_dir, point_gen=True, data_type='validation'):
+    print(f'\n Performing inference on {data_type} set!')
     index = 1
-    filepath = os.path.join(save_dir, "validation_output_" + str(epoch) + ".txt")
+    filepath = os.path.join(save_dir, f"{data_type}_output_" + str(epoch) + ".txt")
     with open(filepath, "w") as f:
-        f.write("Average loss for this epoch (train set):" + str(avg_epoch_loss))
+        if data_type == 'validation':
+            f.write("Average loss for this epoch (train set):" + str(avg_epoch_loss))
         for batch_data in dataset:
             X = tf.squeeze(batch_data[0], axis=1)
             y = tf.squeeze(batch_data[1], axis=1)
@@ -370,9 +371,9 @@ def experiment_pointer_gen():
         cpt_manager.save()
 
         # Perform inference on val set and output for inspection.
-        validation_inference(encoder, decoder, vocab, ds_val,
-                             batch_size, epoch+1, average_batch_loss_per_epoch,
-                             checkpoint_directory, point_gen=True)
+        greedy_inference(encoder, decoder, vocab, ds_val,
+                             epoch+1, average_batch_loss_per_epoch,
+                             checkpoint_directory, point_gen=True, data_type="validation")
 
 
 def experiment_baseline():
@@ -465,7 +466,7 @@ def experiment_baseline():
         checkpoint.save(file_prefix=checkpoint_prefix)
 
         # Perform inference on val set and output for inspection.
-        validation_inference(encoder, decoder, vocab, ds_val, batch_size,
+        greedy_inference(encoder, decoder, vocab, ds_val,
                              epoch+1, epoch_loss/total_train_batches, point_gen=True)
 
 
